@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { Divider } from "@mui/material";
 import { useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
 const AddTweet = () => {
@@ -36,7 +35,7 @@ const AddTweet = () => {
             onChange={e => setTweetContent(e.target.value)}
             className="w-full p-2 border bg-base-200 border-gray-300 rounded focus:outline-none focus:border-blue-500"
           />
-          <Divider />
+          <br />
           <div className="flex justify-center">
             {loading ? (
               <button className="btn btn-square">
