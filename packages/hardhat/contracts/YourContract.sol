@@ -12,76 +12,95 @@ import "hardhat/console.sol";
  * It also allows the owner to withdraw the Ether in the contract
  * @author BuidlGuidl
  */
+interface IProfile {
+    struct UserProfile {
+        string displayName;
+        string bio;
+    }
+
+    function getProfile (address _user) external view returns (UserProfile memory); 
+}
+
 contract YourContract {
-	// State Variables
-	address public immutable owner;
-	string public greeting = "Building Unstoppable Apps!!!";
-	bool public premium = false;
-	uint256 public totalCounter = 0;
-	mapping(address => uint) public userGreetingCounter;
 
-	// Events: a way to emit log statements from smart contract that can be listened to by external parties
-	event GreetingChange(
-		address indexed greetingSetter,
-		string newGreeting,
-		bool premium,
-		uint256 value
-	);
+    uint16 public MAX_TWEET_LENGTH = 280;
 
-	// Constructor: Called once on contract deployment
-	// Check packages/hardhat/deploy/00_deploy_your_contract.ts
-	constructor(address _owner) {
-		owner = _owner;
-	}
+    struct Tweet {
+        address author;
+        string content;
+        uint256 timestamp;
+        uint256 likes;
+        uint256 id;
+    }
 
-	// Modifier: used to define a set of rules that must be met before or after a function is executed
-	// Check the withdraw() function
-	modifier isOwner() {
-		// msg.sender: predefined variable that represents address of the account that called the current function
-		require(msg.sender == owner, "Not the Owner");
-		_;
-	}
+    mapping(address => Tweet[] ) public tweets;
 
-	/**
-	 * Function that allows anyone to change the state variable "greeting" of the contract and increase the counters
-	 *
-	 * @param _newGreeting (string memory) - new greeting to save on the contract
-	 */
-	function setGreeting(string memory _newGreeting) public payable {
-		// Print data to the hardhat chain console. Remove when deploying to a live network.
-		console.log(
-			"Setting new greeting '%s' from %s",
-			_newGreeting,
-			msg.sender
-		);
+    IProfile profileContract;
 
-		// Change state variables
-		greeting = _newGreeting;
-		totalCounter += 1;
-		userGreetingCounter[msg.sender] += 1;
+    modifier onlyRegistered(){
+        IProfile.UserProfile memory userProfileTemp = profileContract.getProfile(msg.sender);
+        require(bytes(userProfileTemp.displayName).length > 0, "USER NOT REGISTERED");
+        _;
+    }
+    
+    constructor (address _profileContract){
+        profileContract = IProfile(_profileContract);
+    }
 
-		// msg.value: built-in global variable that represents the amount of ether sent with the transaction
-		if (msg.value > 0) {
-			premium = true;
-		} else {
-			premium = false;
-		}
+    event TweetCreated(uint256 id, address author, string content, uint256 timestamp);
+    event TweetLiked(address liker, address tweetAuthor, uint256 tweetId, uint256 newLikeCount);
+    event TweetUnliked(address unliker, address tweetAuthor, uint256 tweetId, uint256 newLikeCount);
+   
+    function changeTweetLength(uint16 _newTweetLength) public {
+        MAX_TWEET_LENGTH = _newTweetLength;
+    }
+    
+    function getTotalLikes(address _author) external view returns(uint){
+        uint totalLikes;
 
-		// emit: keyword used to trigger an event
-		emit GreetingChange(msg.sender, _newGreeting, msg.value > 0, msg.value);
-	}
+        for(uint i = 0; i < tweets[_author].length; i++){
+            totalLikes += tweets[_author][i].likes;
+        }
+        return totalLikes;
+    }
 
-	/**
-	 * Function that allows the owner to withdraw all the Ether in the contract
-	 * The function can only be called by the owner of the contract as defined by the isOwner modifier
-	 */
-	function withdraw() public isOwner {
-		(bool success, ) = owner.call{ value: address(this).balance }("");
-		require(success, "Failed to send Ether");
-	}
+    function createTweet(string memory _tweet) public {
 
-	/**
-	 * Function that allows the contract to receive ETH
-	 */
-	receive() external payable {}
+        require(bytes(_tweet).length <= MAX_TWEET_LENGTH, "Tweet is too long!" );
+
+        Tweet memory newTweet = Tweet({
+            id: tweets[msg.sender].length,
+            author: msg.sender,
+            content: _tweet,
+            timestamp: block.timestamp,
+            likes: 0
+        });
+
+        tweets[msg.sender].push(newTweet);
+        emit TweetCreated(newTweet.id, newTweet.author, newTweet.content, newTweet.timestamp);
+    }
+
+    function likeTweet(address author, uint256 id) external {
+        require(tweets[author][id].id == id, "Tweet Doesnt exists!");
+        tweets[author][id].likes++;
+        
+        emit TweetLiked(msg.sender, author, id, tweets[author][id].likes);
+    } 
+
+      function unlikeTweet(address author, uint256 id) external onlyRegistered{
+        require(tweets[author][id].id == id, "Tweet Doesnt exists!");
+        require(tweets[author][id].likes > 0, "Tweet doesnt have likes");
+        tweets[author][id].likes--;
+
+        emit TweetUnliked(msg.sender, author, id, tweets[author][id].likes);
+
+    } 
+
+    function getTweet(uint _i) public view returns (Tweet memory){
+        return tweets[msg.sender][_i];
+    }
+
+    function getAllTweets(address _owner) public view returns (Tweet[] memory ){
+        return tweets[_owner];
+    }
 }
